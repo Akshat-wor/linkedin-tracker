@@ -19,8 +19,7 @@
     "publish": {
       "provider": "github",
       "owner": "Akshat-wor",
-      "repo": "linkedin-tracker",
-      "private": true
+      "repo": "linkedin-tracker"
     },
     "files": [
       "main.js",
