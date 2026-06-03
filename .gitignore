@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output (installers are uploaded as GitHub Release assets)
+dist/
+
+# macOS
+.DS_Store
+*.dmg
+
+# Windows
+Thumbs.db
+*.exe
+
+# Electron
+out/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
