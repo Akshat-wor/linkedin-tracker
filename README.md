@@ -64,7 +64,7 @@ LinkedIn Tracker runs in the background and monitors your clipboard for LinkedIn
 
 ### Setup
 ```bash
-git clone https://github.com/YOUR_USERNAME/linkedin-tracker.git
+git clone https://github.com/Akshat-wor/linkedin-tracker.git
 cd linkedin-tracker
 npm install
 ```
