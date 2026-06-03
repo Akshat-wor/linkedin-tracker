@@ -543,6 +543,16 @@ function initAutoUpdater() {
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
 
+    // Private repo: electron-updater needs a GitHub token to access releases.
+    // The token is read from:
+    //   1. The GH_TOKEN environment variable (for CI/testing), OR
+    //   2. A bundled `dev-app-update.yml` file (for development), OR
+    //   3. The `app-update.yml` embedded during build by electron-builder
+    //
+    // For packaged builds, electron-builder auto-generates app-update.yml
+    // from the publish config in package.json. The GH_TOKEN must be set
+    // as a GitHub Actions secret (it already is via GITHUB_TOKEN).
+
     // ── Event handlers ────────────────────────────────────────
 
     autoUpdater.on("checking-for-update", () => {

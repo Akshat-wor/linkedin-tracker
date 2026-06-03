@@ -26,6 +26,8 @@ jobs:
 
       # --publish always: uploads installers + latest.yml to GitHub Release
       # latest.yml is required by electron-updater for auto-update detection
+      # GH_TOKEN is used both for publishing AND embedded into the app
+      # for private repo auto-update authentication
       - name: Build & Publish Windows installer
         run: npx electron-builder --win --publish always
         env:
