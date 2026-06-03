@@ -12,10 +12,11 @@ const {
     app, BrowserWindow, ipcMain, Tray, Menu, shell, clipboard: electronClipboard
 } = require("electron");
 
-const AutoLaunch = require("auto-launch");
-const axios      = require("axios");
-const fs         = require("fs");
-const path       = require("path");
+const AutoLaunch    = require("auto-launch");
+const axios         = require("axios");
+const fs            = require("fs");
+const path          = require("path");
+const { autoUpdater } = require("electron-updater");
 
 // ── Paths ─────────────────────────────────────────────────────
 const USER_DATA   = app.getPath("userData");
@@ -27,11 +28,8 @@ const COUNTER_PATH = path.join(USER_DATA, "daily_counter.json");
 // ── API ───────────────────────────────────────────────────────
 const API_URL = "https://script.google.com/macros/s/AKfycbwHWMIIDndNuKk7F2O4WWT4cfAnqDmoiNqYfngXCrIJzZHVUWz181O5XBCiERb_7bzz/exec";
 
-// ── Update check ──────────────────────────────────────────────
-const CURRENT_VERSION   = require("./package.json").version;
-const GITHUB_REPO_OWNER = "Akshat-wor";
-const GITHUB_REPO_NAME  = "linkedin-tracker";
-const RELEASES_PAGE_URL = `https://github.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/releases/latest`;
+// ── Version ───────────────────────────────────────────────────
+const CURRENT_VERSION = require("./package.json").version;
 
 // ── Constants ─────────────────────────────────────────────────
 const CLIPBOARD_INTERVAL    = 3000;
@@ -513,56 +511,75 @@ function restartPolling() {
 }
 
 // ============================================================
-//  12. UPDATE CHECKER
+//  12. AUTO-UPDATER (electron-updater)
 // ============================================================
+//
+//  How it works:
+//  1. On startup, checks GitHub Releases for a newer version
+//  2. If found, downloads the update silently in the background
+//  3. Installs the update when the app is next restarted/quit
+//  4. electron-builder publishes `latest.yml` / `latest-mac.yml`
+//     alongside the installers — autoUpdater reads these files.
+//
+//  No manual GitHub API calls needed — electron-updater handles
+//  version comparison, download, verification, and installation.
 
-/**
- * Compares two semver strings (e.g. "1.0.0" vs "1.1.0").
- * Returns true if `remote` is newer than `local`.
- */
-function isNewerVersion(local, remote) {
-    const lParts = local.replace(/^v/, "").split(".").map(Number);
-    const rParts = remote.replace(/^v/, "").split(".").map(Number);
-    for (let i = 0; i < Math.max(lParts.length, rParts.length); i++) {
-        const l = lParts[i] || 0;
-        const r = rParts[i] || 0;
-        if (r > l) return true;
-        if (r < l) return false;
+function initAutoUpdater() {
+    // Don't run auto-updater in development (no packaged app to update)
+    if (!app.isPackaged) {
+        writeLog("  [INFO] Auto-updater: skipped (running in dev mode).");
+        return;
     }
-    return false;
-}
 
-/**
- * Checks the GitHub Releases API for a newer version.
- * Logs a prominent message with a download link if an update is available.
- * Non-fatal — never crashes the app.
- */
-async function checkForUpdates() {
-    try {
-        const apiUrl = `https://api.github.com/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/releases/latest`;
-        const response = await axios.get(apiUrl, {
-            timeout: 8000,
-            headers: { "Accept": "application/vnd.github.v3+json" }
-        });
+    // Configure logging — route all updater logs through our writeLog
+    autoUpdater.logger = {
+        info:  (msg) => writeLog(`[UPDATER] ${msg}`),
+        warn:  (msg) => writeLog(`[UPDATER WARN] ${msg}`),
+        error: (msg) => writeLog(`[UPDATER ERROR] ${msg}`),
+        debug: (msg) => writeLog(`[UPDATER DEBUG] ${msg}`)
+    };
 
-        const latestTag = response.data.tag_name;  // e.g. "v1.1.0"
-        const latestVersion = latestTag.replace(/^v/, "");
+    // Don't auto-download — let us control the flow
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
 
-        if (isNewerVersion(CURRENT_VERSION, latestVersion)) {
-            writeLog(`  ┌─────────────────────────────────────────────────┐`);
-            writeLog(`  │  🚀 NEW VERSION AVAILABLE: v${latestVersion}              │`);
-            writeLog(`  │  Current: v${CURRENT_VERSION}                              │`);
-            writeLog(`  │  Download: ${RELEASES_PAGE_URL}`);
-            writeLog(`  └─────────────────────────────────────────────────┘`);
+    // ── Event handlers ────────────────────────────────────────
 
-            // Also open the releases page in the default browser
-            shell.openExternal(RELEASES_PAGE_URL).catch(() => {});
-        } else {
-            writeLog(`  [OK] Version: v${CURRENT_VERSION} is up to date.`);
-        }
-    } catch (err) {
-        writeLog(`  [WARN] Update check failed: ${err.message} — skipping.`);
-    }
+    autoUpdater.on("checking-for-update", () => {
+        writeLog("  [UPDATER] Checking for updates...");
+    });
+
+    autoUpdater.on("update-available", (info) => {
+        writeLog(`  ┌─────────────────────────────────────────────────┐`);
+        writeLog(`  │  🚀 UPDATE AVAILABLE: v${info.version}`);
+        writeLog(`  │  Current: v${CURRENT_VERSION}`);
+        writeLog(`  │  Downloading automatically...`);
+        writeLog(`  └─────────────────────────────────────────────────┘`);
+    });
+
+    autoUpdater.on("update-not-available", () => {
+        writeLog(`  [OK] Version: v${CURRENT_VERSION} is up to date.`);
+    });
+
+    autoUpdater.on("download-progress", (progress) => {
+        writeLog(`  [UPDATER] Download: ${Math.round(progress.percent)}% (${(progress.transferred / 1048576).toFixed(1)} / ${(progress.total / 1048576).toFixed(1)} MB)`);
+    });
+
+    autoUpdater.on("update-downloaded", (info) => {
+        writeLog(`  ┌─────────────────────────────────────────────────┐`);
+        writeLog(`  │  ✅ UPDATE DOWNLOADED: v${info.version}`);
+        writeLog(`  │  Will install on next app restart.`);
+        writeLog(`  └─────────────────────────────────────────────────┘`);
+    });
+
+    autoUpdater.on("error", (err) => {
+        writeLog(`  [UPDATER ERROR] ${err.message}`);
+    });
+
+    // ── Trigger the check ─────────────────────────────────────
+    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+        writeLog(`  [UPDATER ERROR] Check failed: ${err.message}`);
+    });
 }
 
 // ============================================================
@@ -598,8 +615,8 @@ async function runStartupSelfTest() {
         apiDegraded = true;
     }
 
-    // 5. Check for updates (non-blocking, non-fatal)
-    await checkForUpdates();
+    // 5. Auto-updater (non-blocking, non-fatal)
+    initAutoUpdater();
 
     writeLog("=== STARTUP SELF-TEST END ===");
 }

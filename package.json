@@ -16,6 +16,11 @@
     "directories": {
       "output": "dist"
     },
+    "publish": {
+      "provider": "github",
+      "owner": "Akshat-wor",
+      "repo": "linkedin-tracker"
+    },
     "files": [
       "main.js",
       "package.json",
@@ -35,12 +40,13 @@
       "icon": "assets/icon.ico"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false
     },
     "mac": {
       "target": [
-        "dmg"
+        "dmg",
+        "zip"
       ],
       "icon": "assets/icon.png",
       "category": "public.app-category.productivity"
@@ -67,7 +73,8 @@
   },
   "dependencies": {
     "auto-launch": "^5.0.6",
-    "axios": "^1.6.0"
+    "axios": "^1.6.0",
+    "electron-updater": "^6.8.3"
   },
   "devDependencies": {
     "dmg-license": "^1.0.11",
