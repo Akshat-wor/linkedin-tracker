@@ -27,6 +27,12 @@ const COUNTER_PATH = path.join(USER_DATA, "daily_counter.json");
 // ── API ───────────────────────────────────────────────────────
 const API_URL = "https://script.google.com/macros/s/AKfycbwHWMIIDndNuKk7F2O4WWT4cfAnqDmoiNqYfngXCrIJzZHVUWz181O5XBCiERb_7bzz/exec";
 
+// ── Update check ──────────────────────────────────────────────
+const CURRENT_VERSION   = require("./package.json").version;
+const GITHUB_REPO_OWNER = "Akshat-wor";
+const GITHUB_REPO_NAME  = "linkedin-tracker";
+const RELEASES_PAGE_URL = `https://github.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/releases/latest`;
+
 // ── Constants ─────────────────────────────────────────────────
 const CLIPBOARD_INTERVAL    = 3000;
 const HEARTBEAT_INTERVAL    = 5 * 60 * 1000;   // 5 min
@@ -507,7 +513,60 @@ function restartPolling() {
 }
 
 // ============================================================
-//  12. STARTUP SELF-TEST
+//  12. UPDATE CHECKER
+// ============================================================
+
+/**
+ * Compares two semver strings (e.g. "1.0.0" vs "1.1.0").
+ * Returns true if `remote` is newer than `local`.
+ */
+function isNewerVersion(local, remote) {
+    const lParts = local.replace(/^v/, "").split(".").map(Number);
+    const rParts = remote.replace(/^v/, "").split(".").map(Number);
+    for (let i = 0; i < Math.max(lParts.length, rParts.length); i++) {
+        const l = lParts[i] || 0;
+        const r = rParts[i] || 0;
+        if (r > l) return true;
+        if (r < l) return false;
+    }
+    return false;
+}
+
+/**
+ * Checks the GitHub Releases API for a newer version.
+ * Logs a prominent message with a download link if an update is available.
+ * Non-fatal — never crashes the app.
+ */
+async function checkForUpdates() {
+    try {
+        const apiUrl = `https://api.github.com/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/releases/latest`;
+        const response = await axios.get(apiUrl, {
+            timeout: 8000,
+            headers: { "Accept": "application/vnd.github.v3+json" }
+        });
+
+        const latestTag = response.data.tag_name;  // e.g. "v1.1.0"
+        const latestVersion = latestTag.replace(/^v/, "");
+
+        if (isNewerVersion(CURRENT_VERSION, latestVersion)) {
+            writeLog(`  ┌─────────────────────────────────────────────────┐`);
+            writeLog(`  │  🚀 NEW VERSION AVAILABLE: v${latestVersion}              │`);
+            writeLog(`  │  Current: v${CURRENT_VERSION}                              │`);
+            writeLog(`  │  Download: ${RELEASES_PAGE_URL}`);
+            writeLog(`  └─────────────────────────────────────────────────┘`);
+
+            // Also open the releases page in the default browser
+            shell.openExternal(RELEASES_PAGE_URL).catch(() => {});
+        } else {
+            writeLog(`  [OK] Version: v${CURRENT_VERSION} is up to date.`);
+        }
+    } catch (err) {
+        writeLog(`  [WARN] Update check failed: ${err.message} — skipping.`);
+    }
+}
+
+// ============================================================
+//  13. STARTUP SELF-TEST
 // ============================================================
 
 async function runStartupSelfTest() {
@@ -538,6 +597,9 @@ async function runStartupSelfTest() {
         writeLog(`  [WARN] API: ${err.message} — will retry on first event`);
         apiDegraded = true;
     }
+
+    // 5. Check for updates (non-blocking, non-fatal)
+    await checkForUpdates();
 
     writeLog("=== STARTUP SELF-TEST END ===");
 }
