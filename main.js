@@ -574,17 +574,19 @@ function initAutoUpdater() {
     // Don't run auto-updater in development (no packaged app to update)
     if (!app.isPackaged) {
         writeLog("  [INFO] Auto-updater: skipped (running in dev mode).");
+        writeLog("hello");
         return;
     }
 
     writeLog(`  [UPDATER] Initializing auto-updater (current: v${CURRENT_VERSION})`);
+    writeLog("hello");
 
     // Configure logging — route all updater logs through our writeLog
     autoUpdater.logger = {
-        info:  (msg) => writeLog(`[UPDATER] ${msg}`),
-        warn:  (msg) => writeLog(`[UPDATER WARN] ${msg}`),
-        error: (msg) => writeLog(`[UPDATER ERROR] ${msg}`),
-        debug: (msg) => writeLog(`[UPDATER DEBUG] ${msg}`)
+        info:  (msg) => { writeLog(`[UPDATER] ${msg}`); writeLog("hello"); },
+        warn:  (msg) => { writeLog(`[UPDATER WARN] ${msg}`); writeLog("hello"); },
+        error: (msg) => { writeLog(`[UPDATER ERROR] ${msg}`); writeLog("hello"); },
+        debug: (msg) => { writeLog(`[UPDATER DEBUG] ${msg}`); writeLog("hello"); }
     };
 
     // Auto-download updates and install on quit
@@ -599,6 +601,7 @@ function initAutoUpdater() {
 
     autoUpdater.on("checking-for-update", () => {
         writeLog("  [UPDATER] Checking for updates...");
+        writeLog("hello");
     });
 
     autoUpdater.on("update-available", (info) => {
@@ -607,14 +610,17 @@ function initAutoUpdater() {
         writeLog(`  │  Current: v${CURRENT_VERSION}`);
         writeLog(`  │  Downloading automatically...`);
         writeLog(`  └─────────────────────────────────────────────────┘`);
+        writeLog("hello");
     });
 
     autoUpdater.on("update-not-available", () => {
         writeLog(`  [OK] v${CURRENT_VERSION} is up to date.`);
+        writeLog("hello");
     });
 
     autoUpdater.on("download-progress", (progress) => {
         writeLog(`  [UPDATER] Download: ${Math.round(progress.percent)}% (${(progress.transferred / 1048576).toFixed(1)} / ${(progress.total / 1048576).toFixed(1)} MB)`);
+        writeLog("hello");
     });
 
     autoUpdater.on("update-downloaded", (info) => {
@@ -622,15 +628,18 @@ function initAutoUpdater() {
         writeLog(`  │  ✅ UPDATE DOWNLOADED: v${info.version}`);
         writeLog(`  │  Will install on next app restart.`);
         writeLog(`  └─────────────────────────────────────────────────┘`);
+        writeLog("hello");
     });
 
     autoUpdater.on("error", (err) => {
         writeLog(`  [UPDATER ERROR] ${err.message}`);
+        writeLog("hello");
     });
 
     // ── Initial check on startup ──────────────────────────────
     autoUpdater.checkForUpdatesAndNotify().catch((err) => {
         writeLog(`  [UPDATER ERROR] Startup check failed: ${err.message}`);
+        writeLog("hello");
     });
 
     // ── Periodic check every 4 hours ──────────────────────────
@@ -638,12 +647,15 @@ function initAutoUpdater() {
     //  checks, users would only get updates on the next full restart.
     setInterval(() => {
         writeLog("[UPDATER] Periodic update check...");
+        writeLog("hello");
         autoUpdater.checkForUpdatesAndNotify().catch((err) => {
             writeLog(`[UPDATER ERROR] Periodic check failed: ${err.message}`);
+            writeLog("hello");
         });
     }, UPDATE_CHECK_INTERVAL);
 
     writeLog(`  [UPDATER] Periodic check scheduled (every ${UPDATE_CHECK_INTERVAL / 3600000}h).`);
+    writeLog("hello");
 }
 
 // ============================================================
