@@ -41,6 +41,9 @@ const CONVERSATION_COOLDOWN = 5000;
 const API_TIMEOUT           = 12000;
 const MAX_API_RETRIES       = 3;
 
+// ── Broadcast ─────────────────────────────────────────────────
+const BROADCAST_URL = "https://raw.githubusercontent.com/Akshat-wor/linkedin-tracker/main/broadcast.json";
+
 // ── Mutable state ─────────────────────────────────────────────
 let AGENT_NAME              = "";
 let lastClipboard           = "";
@@ -54,6 +57,7 @@ let clipboardFailureCount   = 0;
 let apiDegraded             = false;
 let queueActive             = false;
 let queriesReplied          = 0;  // loaded from disk on startup
+let lastBroadcastTimestamp  = ""; // tracks last seen broadcast to avoid duplicates
 
 // ── Auto-launch ───────────────────────────────────────────────
 // FIX: When packaged, auto-launch MUST point to the real executable path.
@@ -482,6 +486,9 @@ function startHeartbeat() {
             `| account=${currentLinkedInAccount || "none"} ` +
             `| queue=${queueActive} | apiDegraded=${apiDegraded}`
         );
+
+        // Check for broadcast messages on every heartbeat
+        checkBroadcast().catch(() => {});
     }, HEARTBEAT_INTERVAL);
     writeLog("Heartbeat monitor started (5 min interval).");
 }
@@ -509,6 +516,44 @@ function restartPolling() {
     lastHeartbeatTime   = Date.now();
     clipboardIntervalId = setInterval(checkClipboard, CLIPBOARD_INTERVAL);
     writeLog("Clipboard polling loop restarted by watchdog.");
+}
+
+// ============================================================
+//  11b. BROADCAST NOTIFICATIONS  (admin → all agents via GitHub)
+// ============================================================
+//
+//  How it works:
+//  1. Admin edits broadcast.json in the repo with a message + timestamp
+//  2. Admin pushes to GitHub (git add broadcast.json && git commit && git push)
+//  3. Every running app checks the raw file on each heartbeat (5 min)
+//  4. If the timestamp is new, the message is logged prominently
+//  5. Each app only shows a message once (tracks lastBroadcastTimestamp)
+
+async function checkBroadcast() {
+    try {
+        const response = await axios.get(BROADCAST_URL, {
+            timeout: 8000,
+            // Bust GitHub's CDN cache (raw.githubusercontent caches for ~5 min)
+            headers: { "Cache-Control": "no-cache" }
+        });
+
+        const data = response.data;
+        if (!data || !data.message || !data.timestamp) return;
+
+        // Only log if this is a NEW broadcast (different timestamp)
+        if (data.timestamp === lastBroadcastTimestamp) return;
+
+        lastBroadcastTimestamp = data.timestamp;
+
+        writeLog(`  ┌─────────────────────────────────────────────────┐`);
+        writeLog(`  │  📢 BROADCAST MESSAGE`);
+        writeLog(`  │  ${data.message}`);
+        writeLog(`  │  Sent: ${data.timestamp}`);
+        writeLog(`  └─────────────────────────────────────────────────┘`);
+    } catch (err) {
+        // Silent fail — broadcast is non-critical
+        writeLog(`[BROADCAST] Check failed (non-critical): ${err.message}`);
+    }
 }
 
 // ============================================================
