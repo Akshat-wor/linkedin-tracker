@@ -36,6 +36,7 @@ const CLIPBOARD_INTERVAL    = 3000;
 const HEARTBEAT_INTERVAL    = 5 * 60 * 1000;   // 5 min
 const WATCHDOG_INTERVAL     = 10 * 60 * 1000;  // 10 min stall threshold
 const QUEUE_FLUSH_INTERVAL  = 60 * 1000;       // retry queue every 60 s
+const UPDATE_CHECK_INTERVAL = 4 * 60 * 60 * 1000; // check for updates every 4 hrs
 const CONVERSATION_COOLDOWN = 5000;
 const API_TIMEOUT           = 12000;
 const MAX_API_RETRIES       = 3;
@@ -531,6 +532,8 @@ function initAutoUpdater() {
         return;
     }
 
+    writeLog(`  [UPDATER] Initializing auto-updater (current: v${CURRENT_VERSION})`);
+
     // Configure logging — route all updater logs through our writeLog
     autoUpdater.logger = {
         info:  (msg) => writeLog(`[UPDATER] ${msg}`),
@@ -539,19 +542,13 @@ function initAutoUpdater() {
         debug: (msg) => writeLog(`[UPDATER DEBUG] ${msg}`)
     };
 
-    // Don't auto-download — let us control the flow
+    // Auto-download updates and install on quit
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
 
-    // Private repo: electron-updater needs a GitHub token to access releases.
-    // The token is read from:
-    //   1. The GH_TOKEN environment variable (for CI/testing), OR
-    //   2. A bundled `dev-app-update.yml` file (for development), OR
-    //   3. The `app-update.yml` embedded during build by electron-builder
-    //
     // For packaged builds, electron-builder auto-generates app-update.yml
-    // from the publish config in package.json. The GH_TOKEN must be set
-    // as a GitHub Actions secret (it already is via GITHUB_TOKEN).
+    // from the publish config in package.json. The CI's GH_TOKEN is used
+    // only for publishing — public repos don't need a token for downloads.
 
     // ── Event handlers ────────────────────────────────────────
 
@@ -568,7 +565,7 @@ function initAutoUpdater() {
     });
 
     autoUpdater.on("update-not-available", () => {
-        writeLog(`  [OK] Version: v${CURRENT_VERSION} is up to date.`);
+        writeLog(`  [OK] v${CURRENT_VERSION} is up to date.`);
     });
 
     autoUpdater.on("download-progress", (progress) => {
@@ -586,10 +583,22 @@ function initAutoUpdater() {
         writeLog(`  [UPDATER ERROR] ${err.message}`);
     });
 
-    // ── Trigger the check ─────────────────────────────────────
+    // ── Initial check on startup ──────────────────────────────
     autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-        writeLog(`  [UPDATER ERROR] Check failed: ${err.message}`);
+        writeLog(`  [UPDATER ERROR] Startup check failed: ${err.message}`);
     });
+
+    // ── Periodic check every 4 hours ──────────────────────────
+    //  The app may run for days in the system tray. Without periodic
+    //  checks, users would only get updates on the next full restart.
+    setInterval(() => {
+        writeLog("[UPDATER] Periodic update check...");
+        autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+            writeLog(`[UPDATER ERROR] Periodic check failed: ${err.message}`);
+        });
+    }, UPDATE_CHECK_INTERVAL);
+
+    writeLog(`  [UPDATER] Periodic check scheduled (every ${UPDATE_CHECK_INTERVAL / 3600000}h).`);
 }
 
 // ============================================================
